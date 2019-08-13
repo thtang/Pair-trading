@@ -41,6 +41,37 @@ def find_cointegrated_pairs(dataframe):
     # 返回结果
     return pvalue_matrix, pairs
 
+def trading_basic(z_score, s0, spread):
+    profit = [0]*len(z_score)
+    cum_profit = 0
+    position = [0]*len(z_score)
+    cur_pos = 0
+    count = 0
+    for i in range(1, len(z_score)):
+
+        if z_score[i]<-s0 and cur_pos==0:
+            # buy spread
+            cum_profit += spread[i]
+            count+=1
+            cur_pos = 1
+        elif z_score[i]>s0 and cur_pos==0:
+            # short-sell spread
+            cum_profit -= spread[i]
+            count+=1
+            cur_pos = -1
+        elif z_score[i]*z_score[i-1]<0 and cur_pos==-1: # zero-crossing
+            cum_profit += spread[i]
+            cur_pos = 0
+            count=0
+        elif z_score[i]*z_score[i-1]<0 and cur_pos==1:
+            cum_profit -= spread[i]
+            cur_pos = 0
+
+
+        profit[i] = cum_profit
+        position[i] = cur_pos
+    return position, profit, cum_profit
+
 def trading(z_score, s0, spread):
     profit = [0]*len(z_score)
     cum_profit = 0
