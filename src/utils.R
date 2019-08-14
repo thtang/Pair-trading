@@ -29,7 +29,7 @@ generate_signal <- function(Z_score, threshold_long, threshold_short) {
   return(signal)
 }
 
-estimate_mu_gamma_LS <- function(Y, pct_training = 0.7) {
+estimate_mu_gamma_LS <- function(Y, pct_training = 0.3) {
   T <- nrow(Y)
   T_trn <- round(pct_training*T)
   # LS regression
@@ -41,7 +41,7 @@ estimate_mu_gamma_LS <- function(Y, pct_training = 0.7) {
   return(list(mu = mu, gamma = gamma))
 }
 
-estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.7) {
+estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.3) {
   T <- nrow(Y)
   T_start <- round(pct_training*T)
   T_lookback <- 500  # lookback window length

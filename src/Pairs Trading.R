@@ -3,7 +3,7 @@ library(egcm)  #install.packages("egcm")
 library(PerformanceAnalytics)
 library(KFAS)
 library(TTR)
-source(file = "./GitHub/Pair-trading/src/utils.R")
+source(file = "C:/Users/thtang/Documents/GitHub/Pair-trading/src/utils.R")
 
 AUD<-read.csv("C:/Users/thtang/Documents/GitHub/Pair-trading/data/AUD_mod.csv", header=T, sep=",")
 EUR<-read.csv("C:/Users/thtang/Documents/GitHub/Pair-trading/data/EUR_mod.csv", header=T, sep=",")
@@ -11,7 +11,10 @@ GBP<-read.csv("C:/Users/thtang/Documents/GitHub/Pair-trading/data/GBP_mod.csv", 
 NZD<-read.csv("C:/Users/thtang/Documents/GitHub/Pair-trading/data/NZD_mod.csv", header=T, sep=",")
 
 AUD_xts <- xts(AUD$Price, order.by=as.Date(AUD$Date,"%Y/%m/%d"), )
+EUR_xts <- xts(EUR$Price, order.by=as.Date(EUR$Date,"%Y/%m/%d"), )
+GBP_xts <- xts(GBP$Price, order.by=as.Date(GBP$Date,"%Y/%m/%d"), )
 NZD_xts <- xts(NZD$Price, order.by=as.Date(NZD$Date,"%Y/%m/%d"), )
+
 AUD_NZD <- cbind(AUD_xts, NZD_xts)
 
 AUD_NZD$NZD_xts[(is.na(AUD_NZD$NZD_xts))] <- mean(AUD_NZD$NZD_xts, na.rm = TRUE)
@@ -116,20 +119,25 @@ colnames(traded_return) <- "traded spread"
 
 
 ## Experiment
+pairs <- cbind(AUD_xts, EUR_xts)
 
-Y_ <- log(AUD_NZD)
-LS <- estimate_mu_gamma_LS(Y_, pct_training = 0.8)
-rolling_LS <- estimate_mu_gamma_rolling_LS(Y_, pct_training = 0.8)
+pairs$AUD_xts[(is.na(pairs$AUD_xts))] <- mean(pairs$AUD_xts, na.rm = TRUE)
+pairs$EUR_xts[(is.na(pairs$EUR_xts))] <- mean(pairs$EUR_xts, na.rm = TRUE)
+
+
+Y_ <- pairs["2017::"]
+LS <- estimate_mu_gamma_LS(Y_, pct_training = 0.3)
+rolling_LS <- estimate_mu_gamma_rolling_LS(Y_, pct_training = 0.3)
 Kalman <- estimate_mu_gamma_Kalman(Y_)
 
 # plots
 par(mfrow = c(2, 1))
 { plot(cbind(LS$mu, rolling_LS$mu, Kalman$mu), 
        legend.loc = "left", main = "Tracking of mu")
-  addEventLines(xts("", index(Y_[round(0.3*nrow(Y_))])), lwd = 2, col = "blue") }
+  addEventLines(xts("", index(Y_[round(0.8*nrow(Y_))])), lwd = 2, col = "blue") }
 { plot(cbind(LS$gamma, rolling_LS$gamma, Kalman$gamma), 
        legend.loc = "left", main = "Tracking of gamma")
-  addEventLines(xts("", index(Y_[round(0.3*nrow(Y_))])), lwd = 2, col = "blue") }
+  addEventLines(xts("", index(Y_[round(0.8*nrow(Y_))])), lwd = 2, col = "blue") }
 
 spread_LS <- compute_spread(Y_, LS$gamma, LS$mu, "LS")
 
@@ -148,3 +156,4 @@ return_Kalman <- pairs_trading(Y_, Kalman$gamma, Kalman$mu, "Kalman", plot = TRU
 # plot
 plot(cumprod(1 + cbind(return_LS, return_rolling_LS, return_Kalman)), 
      main = "Cum P&L", legend.loc = "topleft")
+
