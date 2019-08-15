@@ -126,7 +126,7 @@ if(anyNA(Y_))
 plot(Y_, legend.loc = "bottomleft", main = "Log-prices")
 
 train_test_ratio = nrow(pairs["2013::2018"])/nrow(pairs["2013::"])
-train_test_ratio = 0.3
+
 print(train_test_ratio)
 LS <- estimate_mu_gamma_LS(Y_, pct_training=train_test_ratio)
 rolling_LS <- estimate_mu_gamma_rolling_LS(Y_ , pct_training=train_test_ratio)
@@ -149,17 +149,27 @@ spread_Kalman <- compute_spread(Y_, Kalman$gamma, Kalman$mu, "Kalman")
 # plots
 plot(cbind(spread_LS, spread_rolling_LS, spread_Kalman), legend.loc = "topright", main = "Spreads")
 
-return_LS <- pairs_trading(Y_, LS$gamma, LS$mu, 
+trading_output <- pairs_trading(Y_, LS$gamma, LS$mu, 
                            "LS", plot = TRUE)
-return_rolling_LS <- pairs_trading(Y_, rolling_LS$gamma, rolling_LS$mu, 
+return_LS <- trading_output$return
+position_LS <- trading_output$position
+
+trading_output <- pairs_trading(Y_, rolling_LS$gamma, rolling_LS$mu, 
                                    "rolling-LS", plot = TRUE)
-return_Kalman <- pairs_trading(Y_, Kalman$gamma, Kalman$mu, 
+return_rolling_LS <- trading_output$return
+position_rolling_LS <- trading_output$position
+
+trading_output <- pairs_trading(Y_, Kalman$gamma, Kalman$mu, 
                                "Kalman", plot = TRUE)
+return_Kalman <- trading_output$return
+position_Kalman <- trading_output$position
+
 
 { plot(cumprod(1 + cbind(return_LS, return_rolling_LS, return_Kalman)), 
      main = "Cum P&L", legend.loc = "topleft") 
   addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue")}
 
+#### performance measurement
 sd(return_LS["2019::"])
 sd(return_rolling_LS["2019::"])
 sd(return_Kalman["2019::"])
@@ -167,3 +177,14 @@ sd(return_Kalman["2019::"])
 SharpeRatio(return_LS["2019::"], Rf = 0, p = 0.95)
 SharpeRatio(return_rolling_LS["2019::"], Rf = 0, p = 0.95)
 SharpeRatio(return_Kalman["2019::"], Rf = 0, p = 0.95)
+
+#holding period
+"
+Holding period = sum(abs(position))/ sum(abs(trade)), where 
+trade(t) = position(t) - position(t-1)
+"
+
+sum(abs(position_LS)[-1])/ sum(abs(diff(position_LS)[-1]))
+sum(abs(position_rolling_LS)[-1])/ sum(abs(diff(position_rolling_LS)[-1]))
+sum(abs(position_Kalman)[-1])/ sum(abs(diff(position_Kalman)[-1]))
+
