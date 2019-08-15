@@ -1,3 +1,11 @@
+library(quantmod)
+library(xts)
+library(MASS)
+library(MTS)
+library(egcm)  #install.packages("egcm")
+library(TTR)
+library(KFAS)
+library(PerformanceAnalytics)
 generate_signal <- function(Z_score, threshold_long, threshold_short) {
   signal <- Z_score
   colnames(signal) <- "signal"
@@ -29,7 +37,7 @@ generate_signal <- function(Z_score, threshold_long, threshold_short) {
   return(signal)
 }
 
-estimate_mu_gamma_LS <- function(Y, pct_training = 0.3) {
+estimate_mu_gamma_LS <- function(Y, pct_training = 0.7) {
   T <- nrow(Y)
   T_trn <- round(pct_training*T)
   # LS regression
@@ -41,7 +49,7 @@ estimate_mu_gamma_LS <- function(Y, pct_training = 0.3) {
   return(list(mu = mu, gamma = gamma))
 }
 
-estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.3) {
+estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.7) {
   T <- nrow(Y)
   T_start <- round(pct_training*T)
   T_lookback <- 500  # lookback window length
@@ -73,7 +81,7 @@ estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.3) {
   return(list(mu = mu_rolling_LS, gamma = gamma_rolling_LS))
 }
 
-estimate_mu_gamma_Kalman <- function(Y) {
+estimate_mu_gamma_Kalman <- function(Y, pct_training=0.7) {
   T <- nrow(Y)
   # init empty variables
   gamma_Kalman_filtering <- mu_Kalman_filtering <- xts(rep(NA, T), index(Y))
@@ -86,7 +94,7 @@ estimate_mu_gamma_Kalman <- function(Y) {
   Zt <- array(as.vector(t(cbind(1, as.matrix(Y[, 2])))), dim = c(1, 2, T))  # time-varying
   Ht <- matrix(1e-3)  # observation variance
   # the prior in the code: P1cov = kappa*P1Inf + P1, kappa = 1e7
-  init <- estimate_mu_gamma_LS(Y)
+  init <- estimate_mu_gamma_LS(Y, pct_training=pct_training)
   a1 <- matrix(c(init$mu[1], init$gamma[1]), 2, 1)
   P1 <- 1e-5*diag(2)  # variance of initial point
   P1inf <- 0*diag(2)
@@ -168,5 +176,5 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
     print(plot(cumprod(1 + portf_return), main = paste("Cum P&L for spread based on", name)))
   }
   
-  return(portf_return)
+  return(list("return"=portf_return, "position"=signal))
 }

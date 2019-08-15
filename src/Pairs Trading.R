@@ -118,42 +118,52 @@ colnames(traded_return) <- "traded spread"
 
 
 
-## Experiment
-pairs <- cbind(AUD_xts, EUR_xts)
+#### Experiment #### 
+pairs <- cbind(AUD_xts, NZD_xts)
+Y_ <- log(pairs["2013::"])
+if(anyNA(Y_)) 
+  Y_ <- na.approx(Y_)
+plot(Y_, legend.loc = "bottomleft", main = "Log-prices")
 
-pairs$AUD_xts[(is.na(pairs$AUD_xts))] <- mean(pairs$AUD_xts, na.rm = TRUE)
-pairs$EUR_xts[(is.na(pairs$EUR_xts))] <- mean(pairs$EUR_xts, na.rm = TRUE)
+train_test_ratio = nrow(pairs["2013::2018"])/nrow(pairs["2013::"])
+train_test_ratio = 0.3
+print(train_test_ratio)
+LS <- estimate_mu_gamma_LS(Y_, pct_training=train_test_ratio)
+rolling_LS <- estimate_mu_gamma_rolling_LS(Y_ , pct_training=train_test_ratio)
+Kalman <- estimate_mu_gamma_Kalman(Y_ , pct_training=train_test_ratio)
 
-
-Y_ <- pairs["2017::"]
-LS <- estimate_mu_gamma_LS(Y_, pct_training = 0.3)
-rolling_LS <- estimate_mu_gamma_rolling_LS(Y_, pct_training = 0.3)
-Kalman <- estimate_mu_gamma_Kalman(Y_)
 
 # plots
 par(mfrow = c(2, 1))
 { plot(cbind(LS$mu, rolling_LS$mu, Kalman$mu), 
        legend.loc = "left", main = "Tracking of mu")
-  addEventLines(xts("", index(Y_[round(0.8*nrow(Y_))])), lwd = 2, col = "blue") }
+  addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue") }
 { plot(cbind(LS$gamma, rolling_LS$gamma, Kalman$gamma), 
        legend.loc = "left", main = "Tracking of gamma")
-  addEventLines(xts("", index(Y_[round(0.8*nrow(Y_))])), lwd = 2, col = "blue") }
+  addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue") }
 
 spread_LS <- compute_spread(Y_, LS$gamma, LS$mu, "LS")
-
 spread_rolling_LS <- compute_spread(Y_, rolling_LS$gamma, rolling_LS$mu, "rolling-LS")
 spread_Kalman <- compute_spread(Y_, Kalman$gamma, Kalman$mu, "Kalman")
 
 # plots
-plot(cbind(spread_LS, spread_rolling_LS, spread_Kalman), legend.loc = "topleft", main = "Spreads")
+plot(cbind(spread_LS, spread_rolling_LS, spread_Kalman), legend.loc = "topright", main = "Spreads")
 
-return_LS <- pairs_trading(Y_, LS$gamma, LS$mu,  "LS", plot = TRUE)
+return_LS <- pairs_trading(Y_, LS$gamma, LS$mu, 
+                           "LS", plot = TRUE)
+return_rolling_LS <- pairs_trading(Y_, rolling_LS$gamma, rolling_LS$mu, 
+                                   "rolling-LS", plot = TRUE)
+return_Kalman <- pairs_trading(Y_, Kalman$gamma, Kalman$mu, 
+                               "Kalman", plot = TRUE)
 
-return_rolling_LS <- pairs_trading(Y_, rolling_LS$gamma, rolling_LS$mu, "rolling-LS", plot = TRUE)
+{ plot(cumprod(1 + cbind(return_LS, return_rolling_LS, return_Kalman)), 
+     main = "Cum P&L", legend.loc = "topleft") 
+  addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue")}
 
-return_Kalman <- pairs_trading(Y_, Kalman$gamma, Kalman$mu, "Kalman", plot = TRUE)
+sd(return_LS["2019::"])
+sd(return_rolling_LS["2019::"])
+sd(return_Kalman["2019::"])
 
-# plot
-plot(cumprod(1 + cbind(return_LS, return_rolling_LS, return_Kalman)), 
-     main = "Cum P&L", legend.loc = "topleft")
-
+SharpeRatio(return_LS["2019::"], Rf = 0, p = 0.95)
+SharpeRatio(return_rolling_LS["2019::"], Rf = 0, p = 0.95)
+SharpeRatio(return_Kalman["2019::"], Rf = 0, p = 0.95)
