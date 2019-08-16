@@ -1,8 +1,3 @@
-library(quantmod)
-library(egcm)  #install.packages("egcm")
-library(PerformanceAnalytics)
-library(KFAS)
-library(TTR)
 source(file = "C:/Users/thtang/Documents/GitHub/Pair-trading/src/utils.R")
 
 AUD<-read.csv("C:/Users/thtang/Documents/GitHub/Pair-trading/data/AUD_mod.csv", header=T, sep=",")
@@ -120,7 +115,15 @@ colnames(traded_return) <- "traded spread"
 
 #### Experiment #### 
 pairs <- cbind(AUD_xts, NZD_xts)
-Y_ <- log(pairs["2013::"])
+
+
+Y_ <- log(pairs["2014::2018"])
+res <- egcm(Y_)
+summary(res)
+
+plot(res)
+
+
 if(anyNA(Y_)) 
   Y_ <- na.approx(Y_)
 plot(Y_, legend.loc = "bottomleft", main = "Log-prices")

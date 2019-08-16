@@ -6,6 +6,7 @@ library(egcm)  #install.packages("egcm")
 library(TTR)
 library(KFAS)
 library(PerformanceAnalytics)
+egcm.set.default.pvalue(0.05)
 generate_signal <- function(Z_score, threshold_long, threshold_short) {
   signal <- Z_score
   colnames(signal) <- "signal"
