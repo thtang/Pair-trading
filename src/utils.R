@@ -150,7 +150,7 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
   signal <- generate_signal(Z_score, threshold_long, threshold_short)
   
   # combine the ref portfolio with trading signal
-  w_portf <- w_spread * lag(cbind(signal, signal))   # NOTE THE LAG!!
+  w_portf <- w_spread * lag(cbind(signal, signal))
   
   # # fix the portfolio (gamma and mu) during a trade
   # lag_signal <- as.numeric(lag(signal))
@@ -174,7 +174,7 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
            main = paste("Z-score and trading on spread based on", name))
       lines(threshold_short, lty = 2)
       print(lines(threshold_long, lty = 2)) }
-    print(plot(cumprod(1 + portf_return), main = paste("Cum P&L for spread based on", name)))
+    print(plot(1 + cumsum(portf_return), main = paste("Cum P&L for spread based on", name)))
   }
   
   return(list("return"=portf_return, "position"=signal))
