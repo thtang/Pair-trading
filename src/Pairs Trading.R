@@ -116,17 +116,15 @@ colnames(traded_return) <- "traded spread"
 #### Experiment #### 
 pairs <- cbind(AUD_xts, NZD_xts)
 
-
 Y_ <- pairs["2014::"]
 res <- egcm(Y_)
 summary(res)
 
 plot(res)
-plot(Y_, legend.loc = "topright", main = "Log Currencies")
 
 if(anyNA(Y_)) 
   Y_ <- na.approx(Y_)
-plot(Y_, legend.loc = "bottomleft", main = "Log-prices")
+plot(Y_, legend.loc = "bottomleft", main = "Price")
 
 train_test_ratio = nrow(pairs["2014::2017"])/nrow(pairs["2014::"])
 
@@ -136,7 +134,7 @@ rolling_LS <- estimate_mu_gamma_rolling_LS(Y_ , pct_training=train_test_ratio)
 Kalman <- estimate_mu_gamma_Kalman(Y_ , pct_training=train_test_ratio)
 
 
-# plots
+# plots parameter tracking 
 par(mfrow = c(2, 1))
 { plot(cbind(LS$mu, rolling_LS$mu, Kalman$mu), 
        legend.loc = "left", main = "Tracking of mu")
@@ -145,9 +143,35 @@ par(mfrow = c(2, 1))
        legend.loc = "left", main = "Tracking of gamma")
   addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue") }
 
+#plot curve fitting
+par(mfrow = c(3, 1))
+tmp <- cbind(Y_$AUD_xts, as.numeric(LS$mu) + as.numeric(LS$gamma)*Y_$NZD_xts)
+colnames(tmp) <- c(colnames(Y_$AUD_xt), paste("mu + gamma x", colnames(Y_$NZD_xts)))
+{ plot(tmp, legend.loc = "top", main = "Regression")
+  addEventLines(xts("training", index(Y_[round(train_test_ratio*nrow(Y_))])), 
+                srt = 90, pos = 2, lwd = 2, col = "blue")
+}
+
+tmp <- cbind(Y_$AUD_xts, as.numeric(rolling_LS$mu) + as.numeric(rolling_LS$gamma)*Y_$NZD_xts)
+colnames(tmp) <- c(colnames(Y_$AUD_xt), paste("mu + gamma x", colnames(Y_$NZD_xts)))
+{ plot(tmp, legend.loc = "top", main = "rolling Regression")
+  addEventLines(xts("training", index(Y_[round(train_test_ratio*nrow(Y_))])), 
+                srt = 90, pos = 2, lwd = 2, col = "blue")
+}
+tmp <- cbind(Y_$AUD_xts, as.numeric(Kalman$mu) + as.numeric(Kalman$gamma)*Y_$NZD_xts)
+colnames(tmp) <- c(colnames(Y_$AUD_xt), paste("mu + gamma x", colnames(Y_$NZD_xts)))
+{ plot(tmp, legend.loc = "top", main = "Kalman fitler")
+  addEventLines(xts("training", index(Y_[round(train_test_ratio*nrow(Y_))])), 
+                srt = 90, pos = 2, lwd = 2, col = "blue")
+}
+
+# generate spread
 spread_LS <- compute_spread(Y_, LS$gamma, LS$mu, "LS")
 spread_rolling_LS <- compute_spread(Y_, rolling_LS$gamma, rolling_LS$mu, "rolling-LS")
 spread_Kalman <- compute_spread(Y_, Kalman$gamma, Kalman$mu, "Kalman")
+
+
+
 
 # plots
 plot(cbind(spread_LS, spread_rolling_LS, spread_Kalman), legend.loc = "topright", main = "Spreads")
@@ -169,8 +193,8 @@ position_Kalman <- trading_output$position
 
 
 { plot(1+ cumsum(cbind(return_LS, return_rolling_LS, return_Kalman)), 
-     main = "Cum P&L", legend.loc = "topleft") 
-  addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue")}
+     main = "Cum P&L", legend.loc = "bottomleft") 
+  addEventLines(xts("training", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, srt = 90, pos = 2, col = "blue")}
 
 
 #### performance measurement
@@ -195,3 +219,4 @@ sum(abs(position_Kalman["2018::"])[-1])/ sum(abs(diff(position_Kalman["2018::"])
 cum_return <- 1 + cumsum(cbind(return_LS, return_rolling_LS, return_Kalman))
 cum_return_test <- as.numeric(cum_return["2019-07-30"]) - as.numeric(cum_return["2018-01-01"])
 cum_return_test
+

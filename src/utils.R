@@ -121,9 +121,10 @@ compute_spread <- function(Y, gamma, mu, name = NULL) {
   return(spread)
 }
 
-generate_Z_score_EMA <- function(spread, n = 120) {
+generate_Z_score_EMA <- function(spread, n = 10, EMA_flag=TRUE) {
   ## traditional rolling windowed mean and variance
   # first, the mean
+  if (EMA_flag){
   spread.mean <- EMA(spread, n)
   spread.mean <- na.locf(spread.mean, fromLast = TRUE)
   spread.demeaned <- spread - spread.mean
@@ -132,6 +133,9 @@ generate_Z_score_EMA <- function(spread, n = 120) {
   spread.var <- na.locf(spread.var, fromLast = TRUE)
   # finally compute Z-score
   Z.score <- spread.demeaned/sqrt(spread.var)
+  }
+  else{Z.score <- (spread-mean(spread["::2017"]))/sd(spread["::2017"])}
+
   return(Z.score)
 }
 
