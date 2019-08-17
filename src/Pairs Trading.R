@@ -1,5 +1,6 @@
 source(file = "C:/Users/thtang/Documents/GitHub/Pair-trading/src/utils.R")
 
+#### Load data ####
 AUD<-read.csv("C:/Users/thtang/Documents/GitHub/Pair-trading/data/AUD_mod.csv", header=T, sep=",")
 EUR<-read.csv("C:/Users/thtang/Documents/GitHub/Pair-trading/data/EUR_mod.csv", header=T, sep=",")
 GBP<-read.csv("C:/Users/thtang/Documents/GitHub/Pair-trading/data/GBP_mod.csv", header=T, sep=",")
@@ -24,6 +25,7 @@ plot(res)
 logprices <- (AUD_NZD)
 plot(logprices, legend.loc = "topleft", main = "Stock log-prices")
 
+#### methodology ####
 # regression
 T <- nrow(logprices)
 T_trn <- round(0.7*T)  # define the training set
@@ -112,8 +114,8 @@ colnames(traded_return) <- "traded spread"
 
 
 
-
 #### Experiment #### 
+source(file = "C:/Users/thtang/Documents/GitHub/Pair-trading/src/utils.R")
 pairs <- cbind(AUD_xts, NZD_xts)
 
 Y_ <- pairs["2014::"]
@@ -137,10 +139,10 @@ Kalman <- estimate_mu_gamma_Kalman(Y_ , pct_training=train_test_ratio)
 # plots parameter tracking 
 par(mfrow = c(2, 1))
 { plot(cbind(LS$mu, rolling_LS$mu, Kalman$mu), 
-       legend.loc = "left", main = "Tracking of mu")
+       legend.loc = "topleft", main = "Tracking of mu")
   addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue") }
 { plot(cbind(LS$gamma, rolling_LS$gamma, Kalman$gamma), 
-       legend.loc = "left", main = "Tracking of gamma")
+       legend.loc = "bottomleft", main = "Tracking of gamma")
   addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue") }
 
 #plot curve fitting
@@ -169,54 +171,94 @@ colnames(tmp) <- c(colnames(Y_$AUD_xt), paste("mu + gamma x", colnames(Y_$NZD_xt
 spread_LS <- compute_spread(Y_, LS$gamma, LS$mu, "LS")
 spread_rolling_LS <- compute_spread(Y_, rolling_LS$gamma, rolling_LS$mu, "rolling-LS")
 spread_Kalman <- compute_spread(Y_, Kalman$gamma, Kalman$mu, "Kalman")
-
-
-
-
 # plots
+par(mfrow = c(5, 1))
 plot(cbind(spread_LS, spread_rolling_LS, spread_Kalman), legend.loc = "topright", main = "Spreads")
 
+plot(cbind(generate_Z_score(spread_LS, EMA_flag = F), 
+           generate_Z_score(spread_rolling_LS, EMA_flag = F), 
+           generate_Z_score(spread_Kalman, EMA_flag = F)), main="Normalized Spreads")
+
+smoothing = 8
+plot(cbind(generate_Z_score(spread_LS, EMA_flag = T, n=smoothing), 
+           generate_Z_score(spread_rolling_LS, EMA_flag = T, n=smoothing), 
+           generate_Z_score(spread_Kalman, EMA_flag = T, n=smoothing)),
+     main=paste0("Normalized Spreads, smoothing:", smoothing))
+smoothing = 16
+plot(cbind(generate_Z_score(spread_LS, EMA_flag = T, n=smoothing), 
+           generate_Z_score(spread_rolling_LS, EMA_flag = T, n=smoothing), 
+           generate_Z_score(spread_Kalman, EMA_flag = T, n=smoothing)),
+     main=paste0("Normalized Spreads, smoothing:", smoothing))
+smoothing = 64
+plot(cbind(generate_Z_score(spread_LS, EMA_flag = T, n=smoothing), 
+           generate_Z_score(spread_rolling_LS, EMA_flag = T, n=smoothing), 
+           generate_Z_score(spread_Kalman, EMA_flag = T, n=smoothing)), 
+     main=paste0("Normalized Spreads, smoothing:", smoothing))
+smoothing = 128
+plot(cbind(generate_Z_score(spread_LS, EMA_flag = T, n=smoothing), 
+           generate_Z_score(spread_rolling_LS, EMA_flag = T, n=smoothing), 
+           generate_Z_score(spread_Kalman, EMA_flag = T, n=smoothing)), 
+     main=paste0("Normalized Spreads, smoothing:", smoothing))
+
+#### Trading 
+source(file = "C:/Users/thtang/Documents/GitHub/Pair-trading/src/utils.R")
+
+s0 = 0.75
+
 trading_output <- pairs_trading(Y_, LS$gamma, LS$mu, 
-                           "LS", plot = TRUE, threshold = 0.72)
+                           "LS", plot = TRUE, threshold = s0)
 return_LS <- trading_output$return
 position_LS <- trading_output$position
 
 trading_output <- pairs_trading(Y_, rolling_LS$gamma, rolling_LS$mu, 
-                                   "rolling-LS", plot = TRUE, threshold = 0.72)
+                                   "rolling-LS", plot = TRUE, threshold = s0)
 return_rolling_LS <- trading_output$return
 position_rolling_LS <- trading_output$position
 
 trading_output <- pairs_trading(Y_, Kalman$gamma, Kalman$mu, 
-                               "Kalman", plot = TRUE, threshold = 0.72)
+                               "Kalman", plot = TRUE, threshold = s0)
 return_Kalman <- trading_output$return
 position_Kalman <- trading_output$position
 
-
+# plot comparison
 { plot(1+ cumsum(cbind(return_LS, return_rolling_LS, return_Kalman)), 
-     main = "Cum P&L", legend.loc = "bottomleft") 
+     main = "Cum P&L, smooth window size = 64", legend.loc = "topleft") 
   addEventLines(xts("training", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, srt = 90, pos = 2, col = "blue")}
 
 
-#### performance measurement
-sd(return_LS["2018::"])
-sd(return_rolling_LS["2018::"])
-sd(return_Kalman["2018::"])
 
-SharpeRatio(return_LS["2018::"], Rf = 0, p = 0.95)
-SharpeRatio(return_rolling_LS["2018::"], Rf = 0, p = 0.95)
-SharpeRatio(return_Kalman["2018::"], Rf = 0, p = 0.95)
+
+#### performance measurement ####
+
+testing_start <- "2018::"
+volatility <- cbind(sd(return_LS[testing_start]),
+                    sd(return_rolling_LS[testing_start]),
+                    sd(return_Kalman[testing_start]))
+rownames(volatility) <- "volatility"
+
+sharpe <- cbind(SharpeRatio(return_LS[testing_start], Rf = 0, p = 0.95),
+                SharpeRatio(return_rolling_LS[testing_start], Rf = 0, p = 0.95),
+                SharpeRatio(return_Kalman[testing_start], Rf = 0, p = 0.95))
 
 #holding period
 "
 Holding period = sum(abs(position))/ sum(abs(trade)), where 
 trade(t) = position(t) - position(t-1)
 "
+holding_period <- cbind(sum(abs(position_LS[testing_start])[-1])/ sum(abs(diff(position_LS[testing_start])[-1])),
+                        sum(abs(position_rolling_LS[testing_start])[-1])/ sum(abs(diff(position_rolling_LS[testing_start])[-1])),
+                        sum(abs(position_Kalman[testing_start])[-1])/ sum(abs(diff(position_Kalman[testing_start])[-1])))
+rownames(holding_period) <- "Holding period"
 
-sum(abs(position_LS["2018::"])[-1])/ sum(abs(diff(position_LS["2018::"])[-1]))
-sum(abs(position_rolling_LS["2018::"])[-1])/ sum(abs(diff(position_rolling_LS["2018::"])[-1]))
-sum(abs(position_Kalman["2018::"])[-1])/ sum(abs(diff(position_Kalman["2018::"])[-1]))
 
 cum_return <- 1 + cumsum(cbind(return_LS, return_rolling_LS, return_Kalman))
-cum_return_test <- as.numeric(cum_return["2019-07-30"]) - as.numeric(cum_return["2018-01-01"])
-cum_return_test
+cum_return_test <- rbind(as.numeric(cum_return["2019-07-30"]) - as.numeric(cum_return["2018-01-01"]))
 
+rownames(cum_return_test) <-"cumulative return"
+
+performance_table <- round(rbind(volatility, sharpe, holding_period, cum_return_test), digits = 6)
+performance_table
+write.csv(performance_table,file="C:/Users/thtang/Documents/GitHub/Pair-trading/performance.csv")
+
+
+                           

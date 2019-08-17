@@ -2,11 +2,12 @@ library(quantmod)
 library(xts)
 library(MASS)
 library(MTS)
-library(egcm)  #install.packages("egcm")
+library(egcm)
 library(TTR)
 library(KFAS)
 library(PerformanceAnalytics)
 egcm.set.default.pvalue(0.05)
+
 generate_signal <- function(Z_score, threshold_long, threshold_short) {
   signal <- Z_score
   colnames(signal) <- "signal"
@@ -40,7 +41,7 @@ generate_signal <- function(Z_score, threshold_long, threshold_short) {
 
 estimate_mu_gamma_LS <- function(Y, pct_training = 0.7) {
   T <- nrow(Y)
-  T_trn <- round(pct_training*T)
+  T_trn <- round(pct_training*T) # set training period
   # LS regression
   ls_coeffs <- coef(lm(Y[1:T_trn, 1] ~ Y[1:T_trn, 2]))
   mu <- xts(rep(ls_coeffs[1], T), index(Y))
@@ -53,7 +54,7 @@ estimate_mu_gamma_LS <- function(Y, pct_training = 0.7) {
 estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.7) {
   T <- nrow(Y)
   T_start <- round(pct_training*T)
-  T_lookback <- 500  # lookback window length
+  T_lookback <- 300  # lookback window length
   T_shift <- 10  # how often is refreshed
   # init empty variables
   gamma_rolling_LS <- mu_rolling_LS <- xts(rep(NA, T), index(Y))
@@ -68,8 +69,8 @@ estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.7) {
     mu_rolling_LS[t0+1] <- ls_coeffs[1]
     gamma_rolling_LS[t0+1] <- ls_coeffs[2]
   }
-  # complete values
-  mu_rolling_LS <- na.locf(mu_rolling_LS)
+  # fill na value
+  mu_rolling_LS <- na.locf(mu_rolling_LS)  
   mu_rolling_LS <- na.locf(mu_rolling_LS, fromLast = TRUE)
   gamma_rolling_LS <- na.locf(gamma_rolling_LS)
   gamma_rolling_LS <- na.locf(gamma_rolling_LS, fromLast = TRUE)
@@ -115,24 +116,25 @@ estimate_mu_gamma_Kalman <- function(Y, pct_training=0.7) {
 }
 
 compute_spread <- function(Y, gamma, mu, name = NULL) {
-  w_spread <- cbind(1, -gamma)/cbind(1+gamma, 1+gamma)
-  spread <- rowSums(Y * w_spread) - mu/(1+gamma)
+  w_spread <- cbind(1, -gamma)/cbind(1+gamma, 1+gamma) # normalize the weight
+  spread <- rowSums(Y * w_spread) - mu/(1+gamma) # construct profolio
   colnames(spread) <- name
   return(spread)
 }
 
-generate_Z_score_EMA <- function(spread, n = 10, EMA_flag=TRUE) {
+generate_Z_score <- function(spread, n = 512, EMA_flag=TRUE) {
   ## traditional rolling windowed mean and variance
   # first, the mean
   if (EMA_flag){
-  spread.mean <- EMA(spread, n)
-  spread.mean <- na.locf(spread.mean, fromLast = TRUE)
-  spread.demeaned <- spread - spread.mean
-  # second, the variance
-  spread.var <- EMA(spread.demeaned^2, n)
-  spread.var <- na.locf(spread.var, fromLast = TRUE)
-  # finally compute Z-score
-  Z.score <- spread.demeaned/sqrt(spread.var)
+    print("smoothing")
+    spread.mean <- EMA(spread, n)
+    spread.mean <- na.locf(spread.mean, fromLast = TRUE)
+    spread.demeaned <- spread - spread.mean
+    # second, the variance
+    spread.var <- EMA(spread.demeaned^2, n)
+    spread.var <- na.locf(spread.var, fromLast = TRUE)
+    # finally compute Z-score
+    Z.score <- spread.demeaned/sqrt(spread.var)
   }
   else{Z.score <- (spread-mean(spread["::2017"]))/sd(spread["::2017"])}
 
@@ -145,7 +147,7 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
   spread <- rowSums(Y * w_spread) - mu/(1+gamma)
   
   # Z-score
-  Z_score <- generate_Z_score_EMA(spread)
+  Z_score <- generate_Z_score(spread)
   threshold_long <- threshold_short <- Z_score
   threshold_short[] <- threshold
   threshold_long[] <- -threshold
@@ -155,13 +157,6 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
   
   # combine the ref portfolio with trading signal
   w_portf <- w_spread * lag(cbind(signal, signal))
-  
-  # # fix the portfolio (gamma and mu) during a trade
-  # lag_signal <- as.numeric(lag(signal))
-  # for (t in 2:nrow(w_portf)) {
-  #   if (lag_signal[t] != 0 && lag_signal[t] == lag_signal[t-1])
-  #     w_portf[t, ] <- w_portf[t-1, ]
-  # }
   
   # now compute the PnL from the log-prices and the portfolio
   X <- diff(Y)  #compute log-returns from log-prices
