@@ -128,7 +128,7 @@ if(anyNA(Y_))
   Y_ <- na.approx(Y_)
 plot(Y_, legend.loc = "bottomleft", main = "Price")
 
-train_test_ratio = nrow(pairs["2014::2017"])/nrow(pairs["2014::"])
+train_test_ratio = nrow(pairs["2014::2018"])/nrow(pairs["2014::"])
 
 print(train_test_ratio)
 LS <- estimate_mu_gamma_LS(Y_, pct_training=train_test_ratio)
@@ -222,7 +222,7 @@ position_Kalman <- trading_output$position
 
 # plot comparison
 { plot(1+ cumsum(cbind(return_LS, return_rolling_LS, return_Kalman)), 
-     main = "Cum P&L, smooth window size = 64", legend.loc = "topleft") 
+     main = "Cum P&L", legend.loc = "topleft") 
   addEventLines(xts("training", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, srt = 90, pos = 2, col = "blue")}
 
 
@@ -230,7 +230,7 @@ position_Kalman <- trading_output$position
 
 #### performance measurement ####
 
-testing_start <- "2018::"
+testing_start <- "2019::"
 volatility <- cbind(sd(return_LS[testing_start]),
                     sd(return_rolling_LS[testing_start]),
                     sd(return_Kalman[testing_start]))
@@ -252,13 +252,15 @@ rownames(holding_period) <- "Holding period"
 
 
 cum_return <- 1 + cumsum(cbind(return_LS, return_rolling_LS, return_Kalman))
-cum_return_test <- rbind(as.numeric(cum_return["2019-07-30"]) - as.numeric(cum_return["2018-01-01"]))
+cum_return_test <- rbind(as.numeric(cum_return["2019-07-30"]) - as.numeric(cum_return["2019-01-01"]))
 
 rownames(cum_return_test) <-"cumulative return"
 
 performance_table <- round(rbind(volatility, sharpe, holding_period, cum_return_test), digits = 6)
 performance_table
-write.csv(performance_table,file="C:/Users/thtang/Documents/GitHub/Pair-trading/performance.csv")
+
+
+write.csv(performance_table,file="C:/Users/thtang/Documents/GitHub/Pair-trading/performance_s3.csv")
 
 
                            

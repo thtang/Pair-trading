@@ -54,7 +54,7 @@ estimate_mu_gamma_LS <- function(Y, pct_training = 0.7) {
 estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.7) {
   T <- nrow(Y)
   T_start <- round(pct_training*T)
-  T_lookback <- 300  # lookback window length
+  T_lookback <- 90  # lookback window length
   T_shift <- 10  # how often is refreshed
   # init empty variables
   gamma_rolling_LS <- mu_rolling_LS <- xts(rep(NA, T), index(Y))
@@ -122,11 +122,11 @@ compute_spread <- function(Y, gamma, mu, name = NULL) {
   return(spread)
 }
 
-generate_Z_score <- function(spread, n = 512, EMA_flag=TRUE) {
+generate_Z_score <- function(spread, n = 512, EMA_flag=FALSE, SMA_flag=FALSE) {
   ## traditional rolling windowed mean and variance
   # first, the mean
   if (EMA_flag){
-    print("smoothing")
+    print("EMA smoothing")
     spread.mean <- EMA(spread, n)
     spread.mean <- na.locf(spread.mean, fromLast = TRUE)
     spread.demeaned <- spread - spread.mean
@@ -135,8 +135,17 @@ generate_Z_score <- function(spread, n = 512, EMA_flag=TRUE) {
     spread.var <- na.locf(spread.var, fromLast = TRUE)
     # finally compute Z-score
     Z.score <- spread.demeaned/sqrt(spread.var)
+  } else if(SMA_flag){
+    print("SMA smoothing")
+    spread.mean <- SMA(spread, n)
+    spread.mean <- na.locf(spread.mean, fromLast = TRUE)
+    spread.demeaned <- spread - spread.mean
+
+    spread.var <- SMA(spread.demeaned^2, n)
+    spread.var <- na.locf(spread.var, fromLast = TRUE)
+    Z.score <- spread.demeaned/sqrt(spread.var)
   }
-  else{Z.score <- (spread-mean(spread["::2017"]))/sd(spread["::2017"])}
+  else{Z.score <- (spread-mean(spread["::2018"]))/sd(spread["::2018"])}
 
   return(Z.score)
 }
@@ -178,3 +187,4 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
   
   return(list("return"=portf_return, "position"=signal))
 }
+
