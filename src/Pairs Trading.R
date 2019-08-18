@@ -36,8 +36,6 @@ y2 <- logprices[, 2]
 # do LS regression
 ls_coeffs <- coef(lm(y1[1:T_trn] ~ y2[1:T_trn]))
 ls_coeffs
-#> (Intercept) y2[1:T_trn] 
-#>    2.435953    0.864618
 mu <- ls_coeffs[1]
 gamma <- ls_coeffs[2]
 
@@ -93,7 +91,7 @@ signal <- generate_signal(Z_score, threshold_long, threshold_short)
 
 # let's compute the PnL directly from the signal and spread
 spread_return <- diff(spread)
-traded_return <- spread_return * lag(signal)   # NOTE THE LAG!!
+traded_return <- spread_return * lag(signal)  
 traded_return[is.na(traded_return)] <- 0
 colnames(traded_return) <- "traded spread"
 
@@ -116,7 +114,7 @@ colnames(traded_return) <- "traded spread"
 
 #### Experiment #### 
 source(file = "C:/Users/thtang/Documents/GitHub/Pair-trading/src/utils.R")
-pairs <- cbind(AUD_xts, NZD_xts)
+pairs <- log(cbind(AUD_xts, NZD_xts))
 
 Y_ <- pairs["2014::"]
 res <- egcm(Y_)
@@ -126,7 +124,7 @@ plot(res)
 
 if(anyNA(Y_)) 
   Y_ <- na.approx(Y_)
-plot(Y_, legend.loc = "bottomleft", main = "Price")
+plot(Y_, legend.loc = "bottomleft", main = "Log Price")
 
 train_test_ratio = nrow(pairs["2014::2018"])/nrow(pairs["2014::"])
 
@@ -139,7 +137,7 @@ Kalman <- estimate_mu_gamma_Kalman(Y_ , pct_training=train_test_ratio)
 # plots parameter tracking 
 par(mfrow = c(2, 1))
 { plot(cbind(LS$mu, rolling_LS$mu, Kalman$mu), 
-       legend.loc = "topleft", main = "Tracking of mu")
+       legend.loc = "bottomleft", main = "Tracking of mu")
   addEventLines(xts("", index(Y_[round(train_test_ratio*nrow(Y_))])), lwd = 2, col = "blue") }
 { plot(cbind(LS$gamma, rolling_LS$gamma, Kalman$gamma), 
        legend.loc = "bottomleft", main = "Tracking of gamma")
@@ -172,7 +170,7 @@ spread_LS <- compute_spread(Y_, LS$gamma, LS$mu, "LS")
 spread_rolling_LS <- compute_spread(Y_, rolling_LS$gamma, rolling_LS$mu, "rolling-LS")
 spread_Kalman <- compute_spread(Y_, Kalman$gamma, Kalman$mu, "Kalman")
 # plots
-par(mfrow = c(5, 1))
+par(mfrow = c(2, 1))
 plot(cbind(spread_LS, spread_rolling_LS, spread_Kalman), legend.loc = "topright", main = "Spreads")
 
 plot(cbind(generate_Z_score(spread_LS, EMA_flag = F), 
@@ -252,7 +250,7 @@ rownames(holding_period) <- "Holding period"
 
 
 cum_return <- 1 + cumsum(cbind(return_LS, return_rolling_LS, return_Kalman))
-cum_return_test <- rbind(as.numeric(cum_return["2019-07-30"]) - as.numeric(cum_return["2019-01-01"]))
+cum_return_test <- rbind(exp(as.numeric(cum_return["2019-07-30"])) - exp(as.numeric(cum_return["2019-01-01"])))
 
 rownames(cum_return_test) <-"cumulative return"
 
@@ -260,7 +258,4 @@ performance_table <- round(rbind(volatility, sharpe, holding_period, cum_return_
 performance_table
 
 
-write.csv(performance_table,file="C:/Users/thtang/Documents/GitHub/Pair-trading/performance_s3.csv")
-
-
-                           
+write.csv(performance_table,file="C:/Users/thtang/Documents/GitHub/Pair-trading/performance_log_s3.csv")
