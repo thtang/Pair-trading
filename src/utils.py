@@ -14,31 +14,19 @@ from pykalman import KalmanFilter
 
 
 def find_cointegrated_pairs(dataframe):
-    # 得到DataFrame长度
     n = dataframe.shape[1]
-    # 初始化p值矩阵
     pvalue_matrix = np.ones((n, n))
-    # 抽取列的名称
     keys = dataframe.keys()
-    # 初始化强协整组
     pairs = []
-    # 对于每一个i
     for i in range(n):
-        # 对于大于i的j
         for j in range(i+1, n):
-            # 获取相应的两只股票的价格Series
             stock1 = dataframe[keys[i]]
             stock2 = dataframe[keys[j]]
-            # 分析它们的协整关系
             result = sm.tsa.stattools.coint(stock1, stock2)
-            # 取出并记录p值
             pvalue = result[1]
             pvalue_matrix[i, j] = pvalue
-            # 如果p值小于0.05
             if pvalue < 0.05:
-                # 记录股票对和相应的p值
                 pairs.append((keys[i], keys[j], pvalue))
-    # 返回结果
     return pvalue_matrix, pairs
 
 def trading_basic(z_score, s0, spread):

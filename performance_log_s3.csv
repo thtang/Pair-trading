@@ -1,0 +1,7 @@
+"","LS","rolling-LS","Kalman"
+"volatility",0.001471,0.001144,0.00093
+"StdDev Sharpe (Rf=0%, p=95%):",-0.022696,0.129176,0.075074
+"VaR Sharpe (Rf=0%, p=95%):",-0.013578,NA,0.067789
+"ES Sharpe (Rf=0%, p=95%):",-0.009718,0.030789,0.067789
+"Holding period",Inf,6.8,12.2
+"cumulative return",-0.017223,0.063944,0.030539

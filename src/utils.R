@@ -1,3 +1,13 @@
+library(quantmod)
+library(xts)
+library(MASS)
+library(MTS)
+library(egcm)
+library(TTR)
+library(KFAS)
+library(PerformanceAnalytics)
+egcm.set.default.pvalue(0.05)
+
 generate_signal <- function(Z_score, threshold_long, threshold_short) {
   signal <- Z_score
   colnames(signal) <- "signal"
@@ -29,9 +39,9 @@ generate_signal <- function(Z_score, threshold_long, threshold_short) {
   return(signal)
 }
 
-estimate_mu_gamma_LS <- function(Y, pct_training = 0.3) {
+estimate_mu_gamma_LS <- function(Y, pct_training = 0.7) {
   T <- nrow(Y)
-  T_trn <- round(pct_training*T)
+  T_trn <- round(pct_training*T) # set training period
   # LS regression
   ls_coeffs <- coef(lm(Y[1:T_trn, 1] ~ Y[1:T_trn, 2]))
   mu <- xts(rep(ls_coeffs[1], T), index(Y))
@@ -41,10 +51,10 @@ estimate_mu_gamma_LS <- function(Y, pct_training = 0.3) {
   return(list(mu = mu, gamma = gamma))
 }
 
-estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.3) {
+estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.7) {
   T <- nrow(Y)
   T_start <- round(pct_training*T)
-  T_lookback <- 500  # lookback window length
+  T_lookback <- 90  # lookback window length
   T_shift <- 10  # how often is refreshed
   # init empty variables
   gamma_rolling_LS <- mu_rolling_LS <- xts(rep(NA, T), index(Y))
@@ -59,8 +69,8 @@ estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.3) {
     mu_rolling_LS[t0+1] <- ls_coeffs[1]
     gamma_rolling_LS[t0+1] <- ls_coeffs[2]
   }
-  # complete values
-  mu_rolling_LS <- na.locf(mu_rolling_LS)
+  # fill na value
+  mu_rolling_LS <- na.locf(mu_rolling_LS)  
   mu_rolling_LS <- na.locf(mu_rolling_LS, fromLast = TRUE)
   gamma_rolling_LS <- na.locf(gamma_rolling_LS)
   gamma_rolling_LS <- na.locf(gamma_rolling_LS, fromLast = TRUE)
@@ -73,7 +83,7 @@ estimate_mu_gamma_rolling_LS <- function(Y, pct_training = 0.3) {
   return(list(mu = mu_rolling_LS, gamma = gamma_rolling_LS))
 }
 
-estimate_mu_gamma_Kalman <- function(Y) {
+estimate_mu_gamma_Kalman <- function(Y, pct_training=0.7) {
   T <- nrow(Y)
   # init empty variables
   gamma_Kalman_filtering <- mu_Kalman_filtering <- xts(rep(NA, T), index(Y))
@@ -86,7 +96,7 @@ estimate_mu_gamma_Kalman <- function(Y) {
   Zt <- array(as.vector(t(cbind(1, as.matrix(Y[, 2])))), dim = c(1, 2, T))  # time-varying
   Ht <- matrix(1e-3)  # observation variance
   # the prior in the code: P1cov = kappa*P1Inf + P1, kappa = 1e7
-  init <- estimate_mu_gamma_LS(Y)
+  init <- estimate_mu_gamma_LS(Y, pct_training=pct_training)
   a1 <- matrix(c(init$mu[1], init$gamma[1]), 2, 1)
   P1 <- 1e-5*diag(2)  # variance of initial point
   P1inf <- 0*diag(2)
@@ -106,23 +116,37 @@ estimate_mu_gamma_Kalman <- function(Y) {
 }
 
 compute_spread <- function(Y, gamma, mu, name = NULL) {
-  w_spread <- cbind(1, -gamma)/cbind(1+gamma, 1+gamma)
-  spread <- rowSums(Y * w_spread) - mu/(1+gamma)
+  w_spread <- cbind(1, -gamma)/cbind(1+gamma, 1+gamma) # normalize the weight
+  spread <- rowSums(Y * w_spread) - mu/(1+gamma) # construct profolio
   colnames(spread) <- name
   return(spread)
 }
 
-generate_Z_score_EMA <- function(spread, n = 120) {
+generate_Z_score <- function(spread, n = 512, EMA_flag=FALSE, SMA_flag=FALSE) {
   ## traditional rolling windowed mean and variance
   # first, the mean
-  spread.mean <- EMA(spread, n)
-  spread.mean <- na.locf(spread.mean, fromLast = TRUE)
-  spread.demeaned <- spread - spread.mean
-  # second, the variance
-  spread.var <- EMA(spread.demeaned^2, n)
-  spread.var <- na.locf(spread.var, fromLast = TRUE)
-  # finally compute Z-score
-  Z.score <- spread.demeaned/sqrt(spread.var)
+  if (EMA_flag){
+    print("EMA smoothing")
+    spread.mean <- EMA(spread, n)
+    spread.mean <- na.locf(spread.mean, fromLast = TRUE)
+    spread.demeaned <- spread - spread.mean
+    # second, the variance
+    spread.var <- EMA(spread.demeaned^2, n)
+    spread.var <- na.locf(spread.var, fromLast = TRUE)
+    # finally compute Z-score
+    Z.score <- spread.demeaned/sqrt(spread.var)
+  } else if(SMA_flag){
+    print("SMA smoothing")
+    spread.mean <- SMA(spread, n)
+    spread.mean <- na.locf(spread.mean, fromLast = TRUE)
+    spread.demeaned <- spread - spread.mean
+
+    spread.var <- SMA(spread.demeaned^2, n)
+    spread.var <- na.locf(spread.var, fromLast = TRUE)
+    Z.score <- spread.demeaned/sqrt(spread.var)
+  }
+  else{Z.score <- (spread-mean(spread["::2018"]))/sd(spread["::2018"])}
+
   return(Z.score)
 }
 
@@ -132,7 +156,7 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
   spread <- rowSums(Y * w_spread) - mu/(1+gamma)
   
   # Z-score
-  Z_score <- generate_Z_score_EMA(spread)
+  Z_score <- generate_Z_score(spread)
   threshold_long <- threshold_short <- Z_score
   threshold_short[] <- threshold
   threshold_long[] <- -threshold
@@ -141,14 +165,7 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
   signal <- generate_signal(Z_score, threshold_long, threshold_short)
   
   # combine the ref portfolio with trading signal
-  w_portf <- w_spread * lag(cbind(signal, signal))   # NOTE THE LAG!!
-  
-  # # fix the portfolio (gamma and mu) during a trade
-  # lag_signal <- as.numeric(lag(signal))
-  # for (t in 2:nrow(w_portf)) {
-  #   if (lag_signal[t] != 0 && lag_signal[t] == lag_signal[t-1])
-  #     w_portf[t, ] <- w_portf[t-1, ]
-  # }
+  w_portf <- w_spread * lag(cbind(signal, signal))
   
   # now compute the PnL from the log-prices and the portfolio
   X <- diff(Y)  #compute log-returns from log-prices
@@ -165,8 +182,9 @@ pairs_trading <- function(Y, gamma, mu, name = NULL, threshold = 0.72, plot = FA
            main = paste("Z-score and trading on spread based on", name))
       lines(threshold_short, lty = 2)
       print(lines(threshold_long, lty = 2)) }
-    print(plot(cumprod(1 + portf_return), main = paste("Cum P&L for spread based on", name)))
+    print(plot(1 + cumsum(portf_return), main = paste("Cum P&L for spread based on", name)))
   }
   
-  return(portf_return)
+  return(list("return"=portf_return, "position"=signal))
 }
+
